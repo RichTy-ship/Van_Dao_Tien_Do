@@ -16,6 +16,7 @@ import {
 import { soundEngine } from './game/audio';
 import { GddCodexModal } from './components/GddCodexModal';
 import { XianxiaAnimationStudioModal } from './components/XianxiaAnimationStudioModal';
+import { XianxiaWorld3D } from './components/XianxiaWorld3D';
 import {
   CultivationPanelModal,
   PlayerInventoryState,
@@ -140,6 +141,7 @@ export default function App() {
   const [isGddOpen, setIsGddOpen] = useState<boolean>(false);
   const [isCultivationOpen, setIsCultivationOpen] = useState<boolean>(false);
   const [isXianxiaStudioOpen, setIsXianxiaStudioOpen] = useState<boolean>(false);
+  const [render3D, setRender3D] = useState<boolean>(true);
   const [activeDestinyEvent, setActiveDestinyEvent] =
     useState<DestinyEventOutcome | null>(null);
   const [endRunSnapshot, setEndRunSnapshot] = useState<{
@@ -2100,8 +2102,22 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#080b10] select-none">
-      {/* Isolated 60FPS 2.5D Isometric World Canvas */}
-      <div ref={canvasMountRef} className="absolute inset-0 w-full h-full" />
+      {/* 3D WebGL Xianxia World or 2.5D Canvas World */}
+      {render3D ? (
+        <div className="absolute inset-0 w-full h-full">
+          <XianxiaWorld3D
+            simRef={simRef}
+            charData={charData}
+            realmIndex={realmIndex}
+            onOpenXianxiaStudio={() => setIsXianxiaStudioOpen(true)}
+            onOpenGddCodex={() => setIsGddOpen(true)}
+            onTriggerDestiny={triggerDestinyInteraction}
+            onToggleRenderMode={() => setRender3D((prev) => !prev)}
+          />
+        </div>
+      ) : (
+        <div ref={canvasMountRef} className="absolute inset-0 w-full h-full" />
+      )}
 
       {/* ====================================================================
           STATE 1: TITLE SCREEN OVERLAY (30-40% Calm Negative Space + Bespoke SVG Lockup)
@@ -2375,6 +2391,19 @@ export default function App() {
                 className="px-3 py-2 rounded bg-[#090d14]/92 hover:bg-[#16202e] text-[#38bdf8] border border-[#38bdf8]/50 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1"
               >
                 <span>🏮</span> Hoạt Ảnh 3D
+              </button>
+
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setRender3D((prev) => !prev);
+                }}
+                aria-label="Chuyển đổi đồ họa 3D / 2D"
+                className="px-3 py-2 rounded bg-[#090d14]/92 hover:bg-[#16202e] text-[#a7f3d0] border border-[#10b981]/50 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1"
+              >
+                <span>🎥</span> {render3D ? 'Đồ Họa 3D' : '2D Cổ Điển'}
               </button>
 
               <button
