@@ -100,14 +100,63 @@ export async function loadGltfAsset(url: string): Promise<GLTF> {
 }
 
 /**
- * Loads shared humanoid animation clips from library assets
+ * Retargets an animation clip from the source humanoid rig onto base.glb:
+ * - Drops all position tracks for child bones (so limb lengths and joint positions are preserved)
+ * - Retains position tracks ONLY for Hips, offset by the rest height difference (baseHips.y - sourceHips.y)
+ * - Keeps all rotation (quaternion) tracks unchanged
+ */
+function retargetClipForBaseModel(
+  clip: THREE.AnimationClip,
+  sourceRestHips: THREE.Vector3
+): THREE.AnimationClip {
+  // Rest pose coordinates of Hips in base.glb
+  const baseRestHips = new THREE.Vector3(0.02903, 1.04622, 0.06400);
+  const delta = new THREE.Vector3().subVectors(baseRestHips, sourceRestHips);
+  const retargetedTracks: THREE.KeyframeTrack[] = [];
+
+  for (const track of clip.tracks) {
+    const isPosition = track.name.endsWith('.position');
+    const isHips =
+      track.name.startsWith('Hips.') ||
+      track.name.startsWith('bone_hips.') ||
+      track.name.toLowerCase().includes('hips');
+
+    if (isPosition) {
+      if (isHips && track instanceof THREE.VectorKeyframeTrack) {
+        // Offset Hips root translation by delta so character stands at natural 1.046m hips height
+        const values = new Float32Array(track.values.length);
+        for (let i = 0; i < track.values.length; i += 3) {
+          values[i] = track.values[i] + delta.x;
+          values[i + 1] = track.values[i + 1] + delta.y;
+          values[i + 2] = track.values[i + 2] + delta.z;
+        }
+        retargetedTracks.push(new THREE.VectorKeyframeTrack(track.name, track.times, values));
+      }
+      // Omit all non-Hips position tracks so child bone lengths are not crushed!
+      continue;
+    }
+
+    // Retain all rotation tracks
+    retargetedTracks.push(track.clone());
+  }
+
+  return new THREE.AnimationClip(clip.name, clip.duration, retargetedTracks);
+}
+
+/**
+ * Loads shared humanoid animation clips from library assets retargeted for base.glb
  */
 async function loadHumanoidSharedClips(): Promise<THREE.AnimationClip[]> {
   const clips: THREE.AnimationClip[] = [];
+  const maleHips = new THREE.Vector3(0.14052, 0.10675, -0.00253);
+  const femaleHips = new THREE.Vector3(0.10674, 0.01461, -0.03697);
+
   try {
     const maleGltf = await loadGltfAsset('/models/player_male.glb');
     if (maleGltf && maleGltf.animations) {
-      clips.push(...maleGltf.animations);
+      for (const anim of maleGltf.animations) {
+        clips.push(retargetClipForBaseModel(anim, maleHips));
+      }
     }
   } catch (e) {
     console.warn('Could not load male animation clips:', e);
@@ -118,7 +167,7 @@ async function loadHumanoidSharedClips(): Promise<THREE.AnimationClip[]> {
     if (femaleGltf && femaleGltf.animations) {
       for (const anim of femaleGltf.animations) {
         if (!clips.some((c) => c.name === anim.name)) {
-          clips.push(anim);
+          clips.push(retargetClipForBaseModel(anim, femaleHips));
         }
       }
     }
@@ -184,12 +233,14 @@ export async function createRealXianxiaModel(
     const clonedScene = SkeletonUtils.clone(gltf.scene) as THREE.Group;
     clonedScene.name = `char_${characterId}`;
 
+    const isBaseModel = url.includes('base.glb');
+    const isBoss = characterId.startsWith('boss');
+    const targetHeight = isBoss ? 2.8 : 1.85;
+
     // Normalize scale and grounded pivot
     const bbox = new THREE.Box3().setFromObject(clonedScene);
     const size = bbox.getSize(new THREE.Vector3());
 
-    const isBoss = characterId.startsWith('boss');
-    const targetHeight = isBoss ? 2.8 : 1.85;
     if (size.y > 0) {
       const scale = targetHeight / size.y;
       clonedScene.scale.set(scale, scale, scale);
@@ -207,7 +258,6 @@ export async function createRealXianxiaModel(
     // Index bones and configure materials
     const boneMap = new Map<string, THREE.Bone>();
     const socketAnchors = new Map<string, THREE.Object3D>();
-    const isBaseModel = url.includes('base.glb');
 
     // Create high-grade Xianxia PBR material for base model
     const cultivatorMat = new THREE.MeshStandardMaterial({
@@ -294,17 +344,15 @@ export async function createRealXianxiaModel(
     const actions = new Map<string, THREE.AnimationAction>();
 
     // Determine available animation clips
-    let availableClips: THREE.AnimationClip[] = gltf.animations && gltf.animations.length > 0
-      ? [...gltf.animations]
-      : [];
+    let availableClips: THREE.AnimationClip[] = [];
 
-    if (availableClips.length === 0 || isBaseModel) {
-      const sharedClips = await loadHumanoidSharedClips();
-      for (const sc of sharedClips) {
-        if (!availableClips.some((c) => c.name === sc.name)) {
-          availableClips.push(sc);
-        }
-      }
+    if (isBaseModel) {
+      // Use properly retargeted humanoid clips for base.glb
+      availableClips = await loadHumanoidSharedClips();
+    } else if (gltf.animations && gltf.animations.length > 0) {
+      availableClips = [...gltf.animations];
+    } else {
+      availableClips = await loadHumanoidSharedClips();
     }
 
     // Register all clips into the mixer
