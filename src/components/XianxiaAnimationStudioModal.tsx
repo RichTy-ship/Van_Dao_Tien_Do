@@ -19,6 +19,7 @@ import {
 } from '../game/xianxia/xianxiaAnimationClips';
 import { XianxiaAnimationController } from '../game/xianxia/animationController';
 import { XianxiaVFXManager } from '../game/xianxia/xianxiaVFX';
+import { createRealXianxiaModel, XianxiaModelInstance } from '../game/xianxia/xianxiaModelLoader';
 
 interface Props {
   onClose: () => void;
@@ -57,6 +58,7 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
 
   // Three.js References
   const controllerRef = useRef<XianxiaAnimationController | null>(null);
+  const realModelRef = useRef<XianxiaModelInstance | null>(null);
   const charGroupRef = useRef<THREE.Group | null>(null);
   const skeletonHelperRef = useRef<THREE.SkeletonHelper | null>(null);
   const vfxManagerRef = useRef<XianxiaVFXManager | null>(null);
@@ -168,6 +170,11 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
 
       controls.update();
 
+      // Update Real 3D Model Instance
+      if (realModelRef.current) {
+        realModelRef.current.update(dt);
+      }
+
       // Update Character Controller & Bones
       if (controllerRef.current) {
         controllerRef.current.update(dt);
@@ -208,20 +215,28 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
   useEffect(() => {
     if (!mountRef.current || !vfxManagerRef.current) return;
     const scene = vfxManagerRef.current['scene'] as THREE.Scene;
+    let cancelled = false;
 
     // 1. Remove previous character and helpers
     if (charGroupRef.current) {
       scene.remove(charGroupRef.current);
+      charGroupRef.current = null;
+    }
+    if (realModelRef.current) {
+      scene.remove(realModelRef.current.group);
+      realModelRef.current = null;
     }
     if (skeletonHelperRef.current) {
       scene.remove(skeletonHelperRef.current);
+      skeletonHelperRef.current = null;
     }
     if (auraGroupRef.current) {
       scene.remove(auraGroupRef.current);
+      auraGroupRef.current = null;
     }
 
-    // 2. Build New Rigged Character
-    const { group, boneMap, skinnedMesh } = createXianxiaRiggedCharacter(
+    // 2. Build Procedural Rigged Character immediately as fallback/initial
+    const { group, boneMap } = createXianxiaRiggedCharacter(
       selectedCharId,
       selectedStage
     );
@@ -259,6 +274,40 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
 
     setActiveBonesCount(boneMap.size);
 
+    // 6. Asynchronously swap in the REAL 3D GLB Model
+    createRealXianxiaModel(selectedCharId, selectedStage)
+      .then((instance) => {
+        if (cancelled) return;
+        // Swap out procedural mesh with real GLB model
+        if (charGroupRef.current) {
+          scene.remove(charGroupRef.current);
+          charGroupRef.current = null;
+        }
+        realModelRef.current = instance;
+        charGroupRef.current = instance.group;
+        scene.add(instance.group);
+
+        // Move aura over to real model
+        if (auraGroupRef.current) {
+          instance.group.add(auraGroupRef.current);
+        }
+
+        // Update skeleton helper to real model
+        if (skeletonHelperRef.current) {
+          scene.remove(skeletonHelperRef.current);
+        }
+        const realHelper = new THREE.SkeletonHelper(instance.group);
+        realHelper.visible = showSkeleton;
+        skeletonHelperRef.current = realHelper;
+        scene.add(realHelper);
+
+        instance.playClip(selectedClipId, 0.1);
+        setActiveBonesCount(instance.boneMap.size || 54);
+      })
+      .catch((err) => {
+        console.warn('Real 3D model load fell back to procedural rig:', err);
+      });
+
     // Telemetry update interval
     const telemetryInterval = setInterval(() => {
       if (controllerRef.current) {
@@ -267,13 +316,21 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
     }, 200);
 
     return () => {
+      cancelled = true;
       clearInterval(telemetryInterval);
+      if (realModelRef.current) {
+        scene.remove(realModelRef.current.group);
+        realModelRef.current = null;
+      }
     };
   }, [selectedCharId, selectedStage]);
 
   // Handle Clip Change
   const handleSelectClip = (clipId: string) => {
     setSelectedClipId(clipId);
+    if (realModelRef.current) {
+      realModelRef.current.playClip(clipId, 0.22);
+    }
     if (controllerRef.current) {
       controllerRef.current.playClip(clipId, 0.22);
     }
@@ -281,6 +338,9 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
 
   // Handle Attack Combo Chain
   const handleAttackCombo = () => {
+    if (realModelRef.current) {
+      realModelRef.current.playClip('Sword_Attack_01', 0.1);
+    }
     if (controllerRef.current) {
       controllerRef.current.triggerAttackInput();
       setSelectedClipId(controllerRef.current.currentClip.id);

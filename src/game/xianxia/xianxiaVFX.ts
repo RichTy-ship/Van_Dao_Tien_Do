@@ -219,38 +219,83 @@ export class XianxiaVFXManager {
 
     if (cfg.auraRadius <= 0) return auraGroup; // Mortal has no visible magical aura
 
-    // Swirling spiritual mist cylinder
-    const mistGeo = new THREE.CylinderGeometry(cfg.auraRadius, cfg.auraRadius * 0.7, 1.8, 24, 1, true);
-    const mistMat = new THREE.MeshBasicMaterial({
-      color: new THREE.Color(cfg.auraColor),
+    const auraColor = new THREE.Color(cfg.auraColor);
+
+    // 1. Celestial Immortal Back Halo Ring (Vòng Kim Quang sau đầu / vai)
+    const haloRadius = 0.35 + cfg.haloRings * 0.08;
+    const haloGeo = new THREE.RingGeometry(haloRadius * 0.88, haloRadius, 36);
+    const haloMat = new THREE.MeshBasicMaterial({
+      color: auraColor,
       transparent: true,
-      opacity: 0.22,
+      opacity: 0.75,
       side: THREE.DoubleSide,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
     });
-    const mistMesh = new THREE.Mesh(mistGeo, mistMat);
-    mistMesh.position.y = 0.9;
-    auraGroup.add(mistMesh);
+    const haloMesh = new THREE.Mesh(haloGeo, haloMat);
+    haloMesh.position.set(0, 1.55, -0.12);
+    auraGroup.add(haloMesh);
 
-    // Concentric base halo rings
+    // 2. Concentric Ground Lotus Rings (Pháp trận linh khí dưới chân)
+    const groundRings: THREE.Mesh[] = [];
     for (let r = 0; r < cfg.haloRings; r++) {
-      const ringRadius = cfg.auraRadius * (0.6 + r * 0.2);
-      const ringGeo = new THREE.TorusGeometry(ringRadius, 0.02, 6, 32);
-      ringGeo.rotateX(Math.PI / 2);
+      const ringRadius = cfg.auraRadius * (0.6 + r * 0.25);
+      const ringGeo = new THREE.RingGeometry(ringRadius * 0.92, ringRadius, 36);
+      ringGeo.rotateX(-Math.PI / 2);
       const ringMat = new THREE.MeshBasicMaterial({
-        color: new THREE.Color(cfg.auraColor),
+        color: auraColor,
         transparent: true,
-        opacity: 0.6,
+        opacity: 0.55 - r * 0.08,
+        side: THREE.DoubleSide,
         blending: THREE.AdditiveBlending,
+        depthWrite: false,
       });
       const ringMesh = new THREE.Mesh(ringGeo, ringMat);
-      ringMesh.position.y = 0.05 + r * 0.02;
+      ringMesh.position.y = 0.03 + r * 0.02;
       auraGroup.add(ringMesh);
+      groundRings.push(ringMesh);
     }
 
+    // 3. Orbiting Dan Tian Qi Orbs (Hạt linh khí / Kim đan hộ thể xoay quanh đan điền)
+    const orbGroup = new THREE.Group();
+    orbGroup.position.y = 0.95;
+    const orbCount = Math.min(cfg.haloRings * 2, 6);
+    const orbs: THREE.Mesh[] = [];
+    const orbGeo = new THREE.SphereGeometry(0.045, 12, 12);
+    const orbMat = new THREE.MeshBasicMaterial({
+      color: auraColor,
+      blending: THREE.AdditiveBlending,
+    });
+
+    for (let i = 0; i < orbCount; i++) {
+      const orb = new THREE.Mesh(orbGeo, orbMat);
+      orbGroup.add(orb);
+      orbs.push(orb);
+    }
+    auraGroup.add(orbGroup);
+
+    let elapsed = 0;
     auraGroup.userData.update = (dt: number) => {
-      mistMesh.rotation.y += dt * 0.85;
+      elapsed += dt;
+      // Gently pulse and rotate the celestial back-halo
+      haloMesh.rotation.z += dt * 0.4;
+      haloMesh.scale.setScalar(1 + Math.sin(elapsed * 2.5) * 0.05);
+
+      // Rotate ground lotus rings in opposite directions
+      groundRings.forEach((ring, idx) => {
+        ring.rotation.z += dt * (idx % 2 === 0 ? 0.3 : -0.3);
+      });
+
+      // Orbiting Dan Tian Qi Orbs
+      const orbitR = 0.55 + Math.sin(elapsed * 1.8) * 0.08;
+      orbs.forEach((orb, idx) => {
+        const angle = elapsed * 2.2 + (idx / orbCount) * Math.PI * 2;
+        orb.position.set(
+          Math.cos(angle) * orbitR,
+          Math.sin(angle * 2) * 0.12,
+          Math.sin(angle) * orbitR
+        );
+      });
     };
 
     return auraGroup;

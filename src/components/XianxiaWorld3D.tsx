@@ -14,6 +14,7 @@ import {
 } from '../game/xianxia/xianxiaRigs';
 import { XianxiaAnimationController } from '../game/xianxia/animationController';
 import { XianxiaVFXManager } from '../game/xianxia/xianxiaVFX';
+import { createRealXianxiaModel, XianxiaModelInstance } from '../game/xianxia/xianxiaModelLoader';
 import { HiddenCharacterData } from '../game/rules';
 
 const WORLD_SCALE = 0.055; // Maps ~1200x1200 world coordinates into ~66x66 Three.js units
@@ -34,6 +35,7 @@ interface EnemyModelRecord {
   group: THREE.Group;
   controller: XianxiaAnimationController;
   skinnedMesh: THREE.SkinnedMesh;
+  realModel?: XianxiaModelInstance;
   currentClip: string;
 }
 
@@ -222,7 +224,7 @@ export const XianxiaWorld3D: React.FC<Props> = ({
       worldGroup.add(bMesh);
     }
 
-    // 4. Player Character Rig & Animation Controller
+    // 4. Player Character Rig & Real 3D Model
     const playerCharId: CharacterId =
       (charData.numericSeed ?? 0) % 2 === 0 ? 'player_male' : 'player_female';
     const currentStage = CULTIVATION_STAGES[realmIndex] || 'Mortal';
@@ -233,6 +235,15 @@ export const XianxiaWorld3D: React.FC<Props> = ({
       characterId: playerCharId,
       boneMap: playerRig.boneMap,
     });
+
+    let playerRealModel: XianxiaModelInstance | null = null;
+    createRealXianxiaModel(playerCharId, currentStage)
+      .then((instance) => {
+        playerRealModel = instance;
+        scene.remove(playerRig.group);
+        scene.add(instance.group);
+      })
+      .catch((err) => console.warn('Real 3D model fallback:', err));
 
     const playerVfx = new XianxiaVFXManager(scene, camera);
     const auraGroup = playerVfx.createCultivationAura(currentStage);
@@ -288,6 +299,15 @@ export const XianxiaWorld3D: React.FC<Props> = ({
         elderCtrl.playClip('Idle_Beard_Stroke', 0.3);
         lmGroup.add(elderRig.group);
         (lmGroup as any).__controller = elderCtrl;
+
+        createRealXianxiaModel('npc_sect_elder', 'Soul Formation')
+          .then((inst) => {
+            lmGroup.remove(elderRig.group);
+            lmGroup.add(inst.group);
+            inst.playClip('Cultivation_Idle', 0.2);
+            (lmGroup as any).__model = inst;
+          })
+          .catch(() => {});
       } else {
         const sGeo = new THREE.BoxGeometry(1.4, 4.2, 0.5);
         const sMat = new THREE.MeshStandardMaterial({
@@ -403,12 +423,13 @@ export const XianxiaWorld3D: React.FC<Props> = ({
       const py = (p.wz ?? 0) * WORLD_SCALE;
 
       // Update Player Position and Smooth Facing
-      playerRig.group.position.set(px, py, pz);
+      const activePlayerObj = playerRealModel ? playerRealModel.group : playerRig.group;
+      activePlayerObj.position.set(px, py, pz);
       auraGroup.position.set(px, py + 1.2, pz);
 
       const targetRotY = -(p.facingAngle ?? 0) + Math.PI / 2;
-      playerRig.group.rotation.y = THREE.MathUtils.lerp(
-        playerRig.group.rotation.y,
+      activePlayerObj.rotation.y = THREE.MathUtils.lerp(
+        activePlayerObj.rotation.y,
         targetRotY,
         0.25
       );
@@ -430,17 +451,28 @@ export const XianxiaWorld3D: React.FC<Props> = ({
             : 'Sword_Combo_Finisher';
         playerController.locomotionSpeed = 0;
         playerController.playClip(comboClip, 0.1);
+        if (playerRealModel) playerRealModel.playClip(comboClip, 0.1);
       } else if ((p.dashTimer ?? 0) > 0) {
         playerController.playClip('Dash', 0.1);
+        if (playerRealModel) playerRealModel.playClip('Run', 0.1);
       } else if (p.meditating) {
         playerController.playClip('Cultivation_Idle', 0.25);
+        if (playerRealModel) playerRealModel.playClip('Cultivation_Idle', 0.25);
       } else if ((p.hitFlash ?? 0) > 0) {
         playerController.playClip('Take_Hit_Front', 0.1);
+        if (playerRealModel) playerRealModel.playClip('Death', 0.1);
       } else {
         playerController.locomotionSpeed = isMoving ? normSpeed : 0;
+        if (playerRealModel) {
+          playerRealModel.playClip(isMoving ? (normSpeed > 0.6 ? 'Run' : 'Walk') : 'Idle', 0.2);
+        }
       }
 
-      playerController.update(dt);
+      if (playerRealModel) {
+        playerRealModel.update(dt);
+      } else {
+        playerController.update(dt);
+      }
       playerVfx.update(dt);
 
       // Update floating Natal Spirit Sword
@@ -489,6 +521,16 @@ export const XianxiaWorld3D: React.FC<Props> = ({
             currentClip: 'Idle',
           };
           enemyModels.set(e.id, rec);
+
+          const enemyRec = rec;
+          createRealXianxiaModel(charId, 'Foundation Establishment')
+            .then((mInst) => {
+              if (!activeEnemyIds.has(e.id)) return;
+              enemyRec.group.remove(enemyRig.group);
+              enemyRec.group.add(mInst.group);
+              enemyRec.realModel = mInst;
+            })
+            .catch(() => {});
         }
 
         const ex = (e.wx ?? 0) * WORLD_SCALE;
@@ -514,6 +556,7 @@ export const XianxiaWorld3D: React.FC<Props> = ({
         if (rec.currentClip !== targetClip) {
           rec.currentClip = targetClip;
           rec.controller.playClip(targetClip, 0.2);
+          if (rec.realModel) rec.realModel.playClip(targetClip, 0.2);
         }
 
         const rawMats = Array.isArray(rec.skinnedMesh.material)
@@ -532,7 +575,11 @@ export const XianxiaWorld3D: React.FC<Props> = ({
           }
         }
 
-        rec.controller.update(dt);
+        if (rec.realModel) {
+          rec.realModel.update(dt);
+        } else {
+          rec.controller.update(dt);
+        }
       }
 
       // Cleanup despawned enemies
@@ -547,6 +594,8 @@ export const XianxiaWorld3D: React.FC<Props> = ({
       // Update Landmark NPC animations
       // ----------------------------------------------------
       for (const lmGroup of landmarkMeshes.values()) {
+        const m = (lmGroup as any).__model;
+        if (m) m.update(dt);
         const ctrl = (lmGroup as any).__controller;
         if (ctrl) ctrl.update(dt);
       }
