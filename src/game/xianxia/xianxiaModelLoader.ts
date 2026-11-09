@@ -428,13 +428,17 @@ export async function createRealXianxiaModel(
     // Determine available animation clips
     let availableClips: THREE.AnimationClip[] = [];
 
-    if (isBaseModel) {
-      // Use properly retargeted humanoid clips for base.glb
-      availableClips = await loadHumanoidSharedClips();
-    } else if (gltf.animations && gltf.animations.length > 0) {
+    if (gltf.animations && gltf.animations.length > 0) {
       availableClips = [...gltf.animations];
-    } else {
-      availableClips = await loadHumanoidSharedClips();
+    }
+
+    if (availableClips.length === 0 || isBaseModel || url.includes('player_female.glb')) {
+      const sharedClips = await loadHumanoidSharedClips();
+      for (const sc of sharedClips) {
+        if (!availableClips.some((c) => c.name === sc.name)) {
+          availableClips.push(sc);
+        }
+      }
     }
 
     // Register all clips into the mixer
@@ -445,17 +449,21 @@ export async function createRealXianxiaModel(
 
         // Map standard Xianxia clip aliases
         const name = clip.name;
-        if (name.includes('Idle') || name.includes('Standing')) {
+        if (name.includes('Idle') || name.includes('Standing') || name.includes('SpIdle')) {
           if (!actions.has('Idle')) actions.set('Idle', action);
           if (!actions.has('Idle_Alternate')) actions.set('Idle_Alternate', action);
           if (!actions.has('Standing')) actions.set('Standing', action);
         }
-        if (name.includes('Walk') || name.includes('RelaxedWalk')) {
+        if (name.includes('Walk') || name.includes('RelaxedWalk') || name.includes('SpWalking')) {
           if (!actions.has('Walk')) actions.set('Walk', action);
         }
-        if (name.includes('Sprint') || name.includes('Run')) {
+        if (name.includes('Sprint') || name.includes('Run') || name.includes('SpRun')) {
           if (!actions.has('Run')) actions.set('Run', action);
           if (!actions.has('Sprint')) actions.set('Sprint', action);
+          if (!actions.has('Fly_Move')) actions.set('Fly_Move', action);
+        }
+        if (name.includes('Jump') || name.includes('SpJumping')) {
+          if (!actions.has('Jump')) actions.set('Jump', action);
           if (!actions.has('Fly_Move')) actions.set('Fly_Move', action);
         }
         if (name.includes('CounterAttack') || (name.includes('Attack') && !name.includes('Finisher'))) {
