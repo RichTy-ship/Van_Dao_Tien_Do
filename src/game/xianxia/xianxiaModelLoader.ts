@@ -7,7 +7,8 @@ import * as THREE from 'three';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CharacterId, CultivationStage } from './types';
-import { CULTIVATION_STAGE_VFX_CONFIG } from './xianxiaRigs';
+import { CULTIVATION_STAGE_VFX_CONFIG, createXianxiaRiggedCharacter } from './xianxiaRigs';
+import { XianxiaAnimationController } from './animationController';
 
 export interface XianxiaModelInstance {
   characterId: CharacterId;
@@ -101,7 +102,43 @@ export async function createRealXianxiaModel(
   characterId: CharacterId,
   stage: CultivationStage = 'Foundation Establishment'
 ): Promise<XianxiaModelInstance> {
-  const url = MODEL_ASSET_URLS[characterId] || MODEL_ASSET_URLS.player_male;
+  const isHumanoid =
+    characterId.startsWith('player') ||
+    characterId.startsWith('npc') ||
+    characterId === 'boss_celestial_immortal';
+
+  if (isHumanoid) {
+    // 100% Authentic Asian Xianxia Cultivator Model (Hanfu robes, hair bun, jade hairpin, billowing sleeves)
+    const rig = createXianxiaRiggedCharacter(characterId, stage);
+    const controller = new XianxiaAnimationController({
+      characterId,
+      boneMap: rig.boneMap,
+    });
+    controller.setCultivationStage(stage);
+
+    return {
+      characterId,
+      cultivationStage: stage,
+      group: rig.group,
+      mixer: null as any,
+      actions: new Map(),
+      activeAction: null,
+      activeClipName: 'Idle',
+      boneMap: rig.boneMap,
+      socketAnchors: rig.socketAnchors,
+      update: (dt: number) => {
+        controller.update(dt);
+      },
+      playClip: (clipName: string, crossFadeDuration: number = 0.22) => {
+        controller.playClip(clipName, crossFadeDuration);
+      },
+      setCultivationStage: (newStage: CultivationStage) => {
+        controller.setCultivationStage(newStage);
+      },
+    };
+  }
+
+  const url = MODEL_ASSET_URLS[characterId] || MODEL_ASSET_URLS.mon_beast;
   const gltf = await loadGltfAsset(url);
 
   // Clone scene with SkeletonUtils to ensure unique bones & weights

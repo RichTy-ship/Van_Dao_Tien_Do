@@ -483,29 +483,79 @@ function buildSkinnedGeometryForCharacter(
   const boneIndexMap = new Map<string, number>();
   bonesList.forEach((b, idx) => boneIndexMap.set(b.name, idx));
 
-  // Base materials for Xianxia visuals
+  const isFemale = characterId.includes('female') || characterId === 'npc_healer';
+  const isElder = characterId === 'npc_sect_elder' || characterId === 'npc_master';
+  const robeColor = isElder ? '#F8FAFC' : isFemale ? '#C084FC' : stageCfg.robeColor || '#0284C7';
+
+  // 1. Robe Material (Authentic Daoist Hanfu Silk)
   const robeMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(stageCfg.robeColor),
+    color: new THREE.Color(robeColor),
     roughness: 0.45,
-    metalness: 0.15,
+    metalness: 0.12,
     emissive: new THREE.Color(stageCfg.auraColor),
-    emissiveIntensity: stageCfg.emissiveIntensity * 0.18,
+    emissiveIntensity: stageCfg.emissiveIntensity * 0.15,
     side: THREE.DoubleSide,
   });
 
+  // 2. Porcelain Asian Skin Material
+  const skinColor = isFemale ? '#FDF2E9' : isElder ? '#FCEBD7' : '#FDE8D4';
   const skinMat = new THREE.MeshStandardMaterial({
-    color: characterId.includes('female') ? '#F9E2D2' : '#F1D0B5',
-    roughness: 0.6,
+    color: skinColor,
+    roughness: 0.55,
     metalness: 0.05,
   });
 
+  // 3. Hair Material (Ebony Silk Hair / White Elder Beard)
+  const hairColor = isElder ? '#F1F5F9' : '#111827';
+  const hairMat = new THREE.MeshStandardMaterial({
+    color: hairColor,
+    roughness: 0.7,
+    metalness: 0.1,
+  });
+
+  // 4. Emerald Jade Material (Trâm Cài Tóc & Ngọc Bội Đan Điền)
+  const jadeMat = new THREE.MeshStandardMaterial({
+    color: '#10B981',
+    emissive: '#059669',
+    emissiveIntensity: 0.65,
+    roughness: 0.15,
+    metalness: 0.4,
+  });
+
+  // 5. Gold Embroidery Trim (Mép Áo Vạt Chéo & Viền Kim Tuyến)
   const trimMat = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(stageCfg.trimColor),
+    color: '#F59E0B',
     roughness: 0.25,
     metalness: 0.85,
     emissive: new THREE.Color(stageCfg.auraColor),
-    emissiveIntensity: stageCfg.emissiveIntensity * 0.35,
+    emissiveIntensity: stageCfg.emissiveIntensity * 0.25,
   });
+
+  // 6. Dan Tian Silk Belt Sash
+  const beltColor = isElder ? '#B45309' : isFemale ? '#DB2777' : '#0F766E';
+  const beltMat = new THREE.MeshStandardMaterial({
+    color: beltColor,
+    roughness: 0.5,
+    metalness: 0.2,
+  });
+
+  // 7. Traditional Daoist Cloth Boots
+  const bootsMat = new THREE.MeshStandardMaterial({
+    color: '#1E293B',
+    roughness: 0.8,
+    metalness: 0.1,
+  });
+
+  // 8. Flying Sword Steel
+  const swordMat = new THREE.MeshStandardMaterial({
+    color: '#FFFFFF',
+    roughness: 0.1,
+    metalness: 0.95,
+    emissive: '#38BDF8',
+    emissiveIntensity: 0.6,
+  });
+
+  const humanoidMaterials = [robeMat, skinMat, hairMat, jadeMat, trimMat, beltMat, bootsMat, swordMat];
 
   const beastFurMat = new THREE.MeshStandardMaterial({
     color: characterId === 'mon_white_tiger' ? '#EAEFF2' : characterId === 'mon_nine_tailed_fox' ? '#FFFFFF' : '#4A3B32',
@@ -537,12 +587,12 @@ function buildSkinnedGeometryForCharacter(
     metalness: 0.3,
   });
 
-  // Assemble appropriate procedural base geometry
   let geometry: THREE.BufferGeometry;
-  let materials: THREE.Material[] = [robeMat, skinMat, trimMat];
+  let materials: THREE.Material[] = humanoidMaterials;
 
   if (characterId.startsWith('player') || characterId.startsWith('npc') || characterId === 'boss_demon_lord' || characterId === 'boss_celestial_immortal') {
     geometry = generateHumanoidSkinnedGeometry(characterId, boneIndexMap, bonesList);
+    materials = humanoidMaterials;
   } else if (characterId === 'mon_nine_tailed_fox') {
     geometry = generateFoxSkinnedGeometry(boneIndexMap, bonesList);
     materials = [beastFurMat, skinMat, trimMat];
@@ -579,7 +629,8 @@ function createPartGeometry(
   b0: number,
   b1: number = b0,
   w0: number = 1.0,
-  w1: number = 0.0
+  w1: number = 0.0,
+  matIndex: number = 0
 ): THREE.BufferGeometry {
   const vCount = geo.attributes.position.count;
   const skinIndices = new Uint16Array(vCount * 4);
@@ -599,6 +650,10 @@ function createPartGeometry(
 
   geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
   geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
+
+  geo.clearGroups();
+  const count = geo.index ? geo.index.count : vCount;
+  geo.addGroup(0, count, matIndex);
   return geo;
 }
 
@@ -615,6 +670,15 @@ function generateHumanoidSkinnedGeometry(
   const isDemonLord = charId === 'boss_demon_lord';
   const isElder = charId === 'npc_sect_elder';
   const widthScale = isDemonLord ? 1.45 : isFemale ? 0.88 : 1.0;
+
+  const MAT_ROBE = 0;
+  const MAT_SKIN = 1;
+  const MAT_HAIR = 2;
+  const MAT_JADE = 3;
+  const MAT_TRIM = 4;
+  const MAT_BELT = 5;
+  const MAT_BOOTS = 6;
+  const MAT_SWORD = 7;
 
   const headIdx = boneIdx.get('bone_head') ?? 5;
   const neckIdx = boneIdx.get('bone_neck') ?? 4;
@@ -640,161 +704,199 @@ function generateHumanoidSkinnedGeometry(
 
   const parts: THREE.BufferGeometry[] = [];
 
-  // 1. Head (Sculpted cranial sphere)
-  const head = createPartGeometry(new THREE.SphereGeometry(0.125 * widthScale, 14, 10), headIdx);
+  // 1. Head (Asian porcelain skin tone)
+  const head = createPartGeometry(new THREE.SphereGeometry(0.125 * widthScale, 14, 10), headIdx, headIdx, 1.0, 0.0, MAT_SKIN);
   head.translate(0, 1.74, 0);
   parts.push(head);
 
-  // 2. Daoist Topknot / Hair Bun
-  const bun = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.12, 10), headIdx);
+  // 2. Daoist Topknot / Hair Bun (Ebony silk hair)
+  const bun = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.12, 10), headIdx, headIdx, 1.0, 0.0, MAT_HAIR);
   bun.translate(0, 1.88, -0.02);
   parts.push(bun);
 
-  // 3. Jade Hairpin (Trâm Cài Tóc)
-  const pin = createPartGeometry(new THREE.CylinderGeometry(0.012, 0.012, 0.28, 8), headIdx);
+  // 3. Jade Hairpin (Trâm Cài Tóc ngọc bích phát sáng)
+  const pin = createPartGeometry(new THREE.CylinderGeometry(0.014, 0.014, 0.32, 8), headIdx, headIdx, 1.0, 0.0, MAT_JADE);
   pin.rotateZ(Math.PI / 2);
   pin.translate(0, 1.88, -0.02);
   parts.push(pin);
 
-  // Elder Long Daoist Beard
+  // Elder Long Daoist Beard (White hair)
   if (isElder) {
-    const beard = createPartGeometry(new THREE.ConeGeometry(0.08, 0.40, 8), headIdx, neckIdx, 0.8, 0.2);
+    const beard = createPartGeometry(new THREE.ConeGeometry(0.08, 0.40, 8), headIdx, neckIdx, 0.8, 0.2, MAT_HAIR);
     beard.rotateX(Math.PI);
     beard.translate(0, 1.44, 0.10);
     parts.push(beard);
   }
 
-  // Female Twin Flowing Hair Locks
+  // Female Twin Flowing Hair Locks & Ribbons
   if (isFemale) {
-    const hairL = createPartGeometry(new THREE.CylinderGeometry(0.03, 0.015, 0.55, 6), headIdx, neckIdx, 0.7, 0.3);
+    const hairL = createPartGeometry(new THREE.CylinderGeometry(0.03, 0.015, 0.55, 6), headIdx, neckIdx, 0.7, 0.3, MAT_HAIR);
     hairL.translate(0.08, 1.38, -0.09);
     parts.push(hairL);
 
-    const hairR = createPartGeometry(new THREE.CylinderGeometry(0.03, 0.015, 0.55, 6), headIdx, neckIdx, 0.7, 0.3);
+    const hairR = createPartGeometry(new THREE.CylinderGeometry(0.03, 0.015, 0.55, 6), headIdx, neckIdx, 0.7, 0.3, MAT_HAIR);
     hairR.translate(-0.08, 1.38, -0.09);
     parts.push(hairR);
+
+    const ribbonL = createPartGeometry(new THREE.BoxGeometry(0.03, 0.45, 0.01), headIdx, neckIdx, 0.8, 0.2, MAT_BELT);
+    ribbonL.rotateZ(0.2);
+    ribbonL.translate(0.12, 1.55, -0.08);
+    parts.push(ribbonL);
+
+    const ribbonR = createPartGeometry(new THREE.BoxGeometry(0.03, 0.45, 0.01), headIdx, neckIdx, 0.8, 0.2, MAT_BELT);
+    ribbonR.rotateZ(-0.2);
+    ribbonR.translate(-0.12, 1.55, -0.08);
+    parts.push(ribbonR);
   }
 
   // Demon Lord Curved Obsidian Horns
   if (isDemonLord) {
-    const hornL = createPartGeometry(new THREE.ConeGeometry(0.07, 0.48, 8), headIdx);
+    const hornL = createPartGeometry(new THREE.ConeGeometry(0.07, 0.48, 8), headIdx, headIdx, 1.0, 0.0, MAT_BOOTS);
     hornL.rotateZ(0.45);
     hornL.rotateX(-0.3);
     hornL.translate(0.15, 1.88, 0.06);
     parts.push(hornL);
 
-    const hornR = createPartGeometry(new THREE.ConeGeometry(0.07, 0.48, 8), headIdx);
+    const hornR = createPartGeometry(new THREE.ConeGeometry(0.07, 0.48, 8), headIdx, headIdx, 1.0, 0.0, MAT_BOOTS);
     hornR.rotateZ(-0.45);
     hornR.rotateX(-0.3);
     hornR.translate(-0.15, 1.88, 0.06);
     parts.push(hornR);
   }
 
-  // 4. Neck
-  const neck = createPartGeometry(new THREE.CylinderGeometry(0.065, 0.075, 0.12, 10), neckIdx);
+  // 4. Neck (Porcelain skin)
+  const neck = createPartGeometry(new THREE.CylinderGeometry(0.065, 0.075, 0.12, 10), neckIdx, neckIdx, 1.0, 0.0, MAT_SKIN);
   neck.translate(0, 1.54, 0);
   parts.push(neck);
 
-  // 5. Chest & Hanfu Crossed Lapels (Áo Bào Cổ Chéo)
-  const chest = createPartGeometry(new THREE.CylinderGeometry(0.20 * widthScale, 0.17 * widthScale, 0.36, 14), chestIdx, spineIdx, 0.7, 0.3);
+  // 5. Chest & Hanfu Crossed Lapels (Áo Bào Cổ Chéo Vạt Lụa)
+  const chest = createPartGeometry(new THREE.CylinderGeometry(0.20 * widthScale, 0.17 * widthScale, 0.36, 14), chestIdx, spineIdx, 0.7, 0.3, MAT_ROBE);
   chest.translate(0, 1.32, 0);
   parts.push(chest);
 
-  // 6. Waist Belt & Dan Tian Core Sash
-  const belt = createPartGeometry(new THREE.CylinderGeometry(0.18 * widthScale, 0.185 * widthScale, 0.14, 14), spineIdx, hipsIdx, 0.6, 0.4);
+  // Crossed Y-collar Golden Lapels (Vạt áo chéo chữ Y viền vàng)
+  const lapelL = createPartGeometry(new THREE.BoxGeometry(0.04, 0.28, 0.02), chestIdx, spineIdx, 0.8, 0.2, MAT_TRIM);
+  lapelL.rotateZ(-0.4);
+  lapelL.translate(0.07 * widthScale, 1.35, 0.18);
+  parts.push(lapelL);
+
+  const lapelR = createPartGeometry(new THREE.BoxGeometry(0.04, 0.28, 0.02), chestIdx, spineIdx, 0.8, 0.2, MAT_TRIM);
+  lapelR.rotateZ(0.4);
+  lapelR.translate(-0.07 * widthScale, 1.35, 0.18);
+  parts.push(lapelR);
+
+  // 6. Waist Belt & Dan Tian Core Sash (Thắt lưng đan điền)
+  const belt = createPartGeometry(new THREE.CylinderGeometry(0.185 * widthScale, 0.19 * widthScale, 0.14, 14), spineIdx, hipsIdx, 0.6, 0.4, MAT_BELT);
   belt.translate(0, 1.08, 0);
   parts.push(belt);
 
-  // Jade Pendant hanging from sash
-  const pendant = createPartGeometry(new THREE.BoxGeometry(0.04, 0.12, 0.02), hipsIdx);
-  pendant.translate(0.08 * widthScale, 0.98, 0.18);
+  // Jade Pendant hanging from sash (Ngọc bội hộ mệnh)
+  const pendant = createPartGeometry(new THREE.CylinderGeometry(0.045, 0.045, 0.02, 12), hipsIdx, hipsIdx, 1.0, 0.0, MAT_JADE);
+  pendant.rotateX(Math.PI / 2);
+  pendant.translate(0.09 * widthScale, 0.98, 0.19);
   parts.push(pendant);
 
+  // Silk tassel below jade pendant
+  const tassel = createPartGeometry(new THREE.ConeGeometry(0.02, 0.10, 6), hipsIdx, hipsIdx, 1.0, 0.0, MAT_TRIM);
+  tassel.translate(0.09 * widthScale, 0.90, 0.19);
+  parts.push(tassel);
+
   // 7. Left Arm (T-Pose along +X axis)
-  const shL = createPartGeometry(new THREE.SphereGeometry(0.085 * widthScale, 10, 8), shLIdx);
+  const shL = createPartGeometry(new THREE.SphereGeometry(0.085 * widthScale, 10, 8), shLIdx, shLIdx, 1.0, 0.0, MAT_ROBE);
   shL.translate(0.26 * widthScale, 1.50, 0);
   parts.push(shL);
 
-  const uArmL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), shLIdx);
+  const uArmL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), shLIdx, shLIdx, 1.0, 0.0, MAT_ROBE);
   uArmL.rotateZ(-Math.PI / 2);
   uArmL.translate(0.40 * widthScale, 1.50, 0);
   parts.push(uArmL);
 
-  // Billowing Wide Daoist Sleeve (Tay Áo Rộng Thướt Tha)
-  const fArmL = createPartGeometry(new THREE.CylinderGeometry(0.08, 0.15, 0.26, 10), elLIdx, sleeveLIdx, 0.6, 0.4);
+  // Billowing Wide Daoist Sleeve Left (Tay Áo Rộng Thụt Thò Đón Gió)
+  const fArmL = createPartGeometry(new THREE.CylinderGeometry(0.09, 0.18, 0.28, 10), elLIdx, sleeveLIdx, 0.6, 0.4, MAT_ROBE);
   fArmL.rotateZ(-Math.PI / 2);
   fArmL.translate(0.67 * widthScale, 1.50, 0);
   parts.push(fArmL);
 
-  const handL = createPartGeometry(new THREE.BoxGeometry(0.10, 0.05, 0.025), handLIdx);
-  handL.translate(0.85 * widthScale, 1.50, 0);
+  const cuffL = createPartGeometry(new THREE.TorusGeometry(0.12, 0.015, 6, 12), elLIdx, sleeveLIdx, 0.8, 0.2, MAT_TRIM);
+  cuffL.rotateY(Math.PI / 2);
+  cuffL.translate(0.80 * widthScale, 1.50, 0);
+  parts.push(cuffL);
+
+  const handL = createPartGeometry(new THREE.BoxGeometry(0.09, 0.045, 0.025), handLIdx, handLIdx, 1.0, 0.0, MAT_SKIN);
+  handL.translate(0.86 * widthScale, 1.50, 0);
   parts.push(handL);
 
   // 8. Right Arm (T-Pose along -X axis)
-  const shR = createPartGeometry(new THREE.SphereGeometry(0.085 * widthScale, 10, 8), shRIdx);
+  const shR = createPartGeometry(new THREE.SphereGeometry(0.085 * widthScale, 10, 8), shRIdx, shRIdx, 1.0, 0.0, MAT_ROBE);
   shR.translate(-0.26 * widthScale, 1.50, 0);
   parts.push(shR);
 
-  const uArmR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), shRIdx);
+  const uArmR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), shRIdx, shRIdx, 1.0, 0.0, MAT_ROBE);
   uArmR.rotateZ(Math.PI / 2);
   uArmR.translate(-0.40 * widthScale, 1.50, 0);
   parts.push(uArmR);
 
   // Billowing Wide Daoist Sleeve Right
-  const fArmR = createPartGeometry(new THREE.CylinderGeometry(0.08, 0.15, 0.26, 10), elRIdx, sleeveRIdx, 0.6, 0.4);
+  const fArmR = createPartGeometry(new THREE.CylinderGeometry(0.09, 0.18, 0.28, 10), elRIdx, sleeveRIdx, 0.6, 0.4, MAT_ROBE);
   fArmR.rotateZ(Math.PI / 2);
   fArmR.translate(-0.67 * widthScale, 1.50, 0);
   parts.push(fArmR);
 
-  const handR = createPartGeometry(new THREE.BoxGeometry(0.10, 0.05, 0.025), handRIdx);
-  handR.translate(-0.85 * widthScale, 1.50, 0);
+  const cuffR = createPartGeometry(new THREE.TorusGeometry(0.12, 0.015, 6, 12), elRIdx, sleeveRIdx, 0.8, 0.2, MAT_TRIM);
+  cuffR.rotateY(Math.PI / 2);
+  cuffR.translate(-0.80 * widthScale, 1.50, 0);
+  parts.push(cuffR);
+
+  const handR = createPartGeometry(new THREE.BoxGeometry(0.09, 0.045, 0.025), handRIdx, handRIdx, 1.0, 0.0, MAT_SKIN);
+  handR.translate(-0.86 * widthScale, 1.50, 0);
   parts.push(handR);
 
-  // 9. Lower Robe Skirt (Vạt Áo Dưới)
-  const skirt = createPartGeometry(new THREE.CylinderGeometry(0.185 * widthScale, 0.30 * widthScale, 0.60, 14), hipsIdx, robeRootIdx, 0.7, 0.3);
+  // 9. Lower Robe Skirt (Vạt Áo Dưới Buông Dài)
+  const skirt = createPartGeometry(new THREE.CylinderGeometry(0.19 * widthScale, 0.32 * widthScale, 0.64, 14), hipsIdx, robeRootIdx, 0.7, 0.3, MAT_ROBE);
   skirt.translate(0, 0.72, 0);
   parts.push(skirt);
 
+  const skirtHem = createPartGeometry(new THREE.TorusGeometry(0.31 * widthScale, 0.015, 6, 16), hipsIdx, robeRootIdx, 0.3, 0.7, MAT_TRIM);
+  skirtHem.rotateX(Math.PI / 2);
+  skirtHem.translate(0, 0.41, 0);
+  parts.push(skirtHem);
+
   // 10. Left Leg (Thigh, Shin, Daoist Boot)
-  const thighL = createPartGeometry(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 10), thighLIdx);
+  const thighL = createPartGeometry(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 10), thighLIdx, thighLIdx, 1.0, 0.0, MAT_ROBE);
   thighL.translate(0.12 * widthScale, 0.69, 0);
   parts.push(thighL);
 
-  const shinL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.05, 0.40, 10), kneeLIdx);
+  const shinL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.05, 0.40, 10), kneeLIdx, kneeLIdx, 1.0, 0.0, MAT_ROBE);
   shinL.translate(0.12 * widthScale, 0.28, 0);
   parts.push(shinL);
 
-  const bootL = createPartGeometry(new THREE.BoxGeometry(0.075, 0.08, 0.18), ankleLIdx);
+  const bootL = createPartGeometry(new THREE.BoxGeometry(0.075, 0.08, 0.18), ankleLIdx, ankleLIdx, 1.0, 0.0, MAT_BOOTS);
   bootL.translate(0.12 * widthScale, 0.04, 0.05);
   parts.push(bootL);
 
   // 11. Right Leg (Thigh, Shin, Daoist Boot)
-  const thighR = createPartGeometry(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 10), thighRIdx);
+  const thighR = createPartGeometry(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 10), thighRIdx, thighRIdx, 1.0, 0.0, MAT_ROBE);
   thighR.translate(-0.12 * widthScale, 0.69, 0);
   parts.push(thighR);
 
-  const shinR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.05, 0.40, 10), kneeRIdx);
+  const shinR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.05, 0.40, 10), kneeRIdx, kneeRIdx, 1.0, 0.0, MAT_ROBE);
   shinR.translate(-0.12 * widthScale, 0.28, 0);
   parts.push(shinR);
 
-  const bootR = createPartGeometry(new THREE.BoxGeometry(0.075, 0.08, 0.18), ankleRIdx);
+  const bootR = createPartGeometry(new THREE.BoxGeometry(0.075, 0.08, 0.18), ankleRIdx, ankleRIdx, 1.0, 0.0, MAT_BOOTS);
   bootR.translate(-0.12 * widthScale, 0.04, 0.05);
   parts.push(bootR);
 
   // 12. Flowing Back Robe Cape
-  const cape = createPartGeometry(new THREE.BoxGeometry(0.36 * widthScale, 1.0, 0.025), robeRootIdx, robeLowerIdx, 0.5, 0.5);
+  const cape = createPartGeometry(new THREE.BoxGeometry(0.36 * widthScale, 1.0, 0.025), robeRootIdx, robeLowerIdx, 0.5, 0.5, MAT_ROBE);
   cape.translate(0, 0.85, -0.15);
   parts.push(cape);
 
-  const merged = mergeGeometries(parts, false);
+  const merged = mergeGeometries(parts, true);
   merged.computeVertexNormals();
   return merged;
 }
 
-
-/**
- * Skinned mesh for Nine-tailed Fox (independent 9 tail influences)
- */
 function generateFoxSkinnedGeometry(
   boneIdx: Map<string, number>,
   bonesList: THREE.Bone[]
