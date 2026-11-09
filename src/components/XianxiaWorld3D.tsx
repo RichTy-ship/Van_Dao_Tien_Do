@@ -658,32 +658,7 @@ export const XianxiaWorld3D: React.FC<Props> = ({
       {/* 3D WebGL Canvas Viewport */}
       <div ref={containerRef} className="absolute inset-0 w-full h-full cursor-crosshair" />
 
-      {/* Top Floating 3D Control Ribbon */}
-      <div className="absolute top-4 left-4 z-20 flex items-center gap-2 pointer-events-auto">
-        <button
-          type="button"
-          onClick={onOpenXianxiaStudio}
-          className="px-3.5 py-1.5 text-xs font-bold bg-[#0f172a]/90 hover:bg-[#1e293b] text-[#38bdf8] border border-[#38bdf8]/60 rounded-md shadow-[0_0_15px_rgba(56,189,248,0.35)] backdrop-blur-md transition-all flex items-center gap-1.5 cursor-pointer"
-        >
-          <span>🏮</span> Xưởng 3D (23 Nhân Vật)
-        </button>
 
-        <button
-          type="button"
-          onClick={onOpenGddCodex}
-          className="px-3 py-1.5 text-xs font-semibold bg-[#0f172a]/90 hover:bg-[#1e293b] text-[#f2d08b] border border-[#c89d54]/50 rounded-md backdrop-blur-md transition-all flex items-center gap-1 cursor-pointer"
-        >
-          <span>📜</span> GDD [G]
-        </button>
-
-        <button
-          type="button"
-          onClick={onToggleRenderMode}
-          className="px-3 py-1.5 text-xs font-semibold bg-[#0f172a]/90 hover:bg-[#1e293b] text-[#a7f3d0] border border-[#10b981]/60 rounded-md backdrop-blur-md transition-all flex items-center gap-1 cursor-pointer"
-        >
-          <span>🎥</span> Chuyển 2D / 3D
-        </button>
-      </div>
 
       {/* Floating 3D Interaction Prompt at bottom */}
       <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 px-4 py-1.5 bg-[#090d14]/85 border border-[#334155]/60 rounded-full text-[11px] font-mono text-[#94a3b8] backdrop-blur-md pointer-events-none flex items-center gap-3">

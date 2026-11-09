@@ -141,7 +141,13 @@ export default function App() {
   const [isGddOpen, setIsGddOpen] = useState<boolean>(false);
   const [isCultivationOpen, setIsCultivationOpen] = useState<boolean>(false);
   const [isXianxiaStudioOpen, setIsXianxiaStudioOpen] = useState<boolean>(false);
-  const [render3D, setRender3D] = useState<boolean>(true);
+  const [render3D, setRender3D] = useState<boolean>(() => {
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('VAN_DAO_RENDER_3D');
+      if (saved !== null) return saved === 'true';
+    }
+    return true;
+  });
   const [activeDestinyEvent, setActiveDestinyEvent] =
     useState<DestinyEventOutcome | null>(null);
   const [endRunSnapshot, setEndRunSnapshot] = useState<{
@@ -2399,12 +2405,22 @@ export default function App() {
                 tabIndex={-1}
                 onClick={(e) => {
                   e.currentTarget.blur();
-                  setRender3D((prev) => !prev);
+                  setRender3D((prev) => {
+                    const next = !prev;
+                    if (typeof window !== 'undefined') {
+                      localStorage.setItem('VAN_DAO_RENDER_3D', String(next));
+                    }
+                    return next;
+                  });
                 }}
                 aria-label="Chuyển đổi đồ họa 3D / 2D"
-                className="px-3 py-2 rounded bg-[#090d14]/92 hover:bg-[#16202e] text-[#a7f3d0] border border-[#10b981]/50 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1"
+                className={`px-3.5 py-2 rounded text-xs font-bold whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1.5 transition-all shadow-md ${
+                  render3D
+                    ? 'bg-[#14233c] hover:bg-[#1e3458] text-[#38bdf8] border border-[#38bdf8]/70 shadow-[0_0_15px_rgba(56,189,248,0.4)]'
+                    : 'bg-[#16202e] hover:bg-[#22334d] text-[#f2d08b] border border-[#c89d54]/70 shadow-[0_0_15px_rgba(200,157,84,0.3)] animate-pulse'
+                }`}
               >
-                <span>🎥</span> {render3D ? 'Đồ Họa 3D' : '2D Cổ Điển'}
+                <span>${render3D ? '🎮 Đang Bật 3D (Click: Về 2D)' : '⚡ BẬT ĐỒ HỌA 3D'}</span>
               </button>
 
               <button
