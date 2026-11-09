@@ -516,14 +516,19 @@ export const XianxiaWorld3D: React.FC<Props> = ({
           rec.controller.playClip(targetClip, 0.2);
         }
 
-        const mat = rec.skinnedMesh.material as THREE.MeshStandardMaterial;
-        if (mat) {
-          if (e.hitFlash > 0) {
-            mat.emissive.set(0xffffff);
-            mat.emissiveIntensity = 0.9;
-          } else {
-            mat.emissive.set(e.color || 0xef4444);
-            mat.emissiveIntensity = 0.2;
+        const rawMats = Array.isArray(rec.skinnedMesh.material)
+          ? rec.skinnedMesh.material
+          : [rec.skinnedMesh.material];
+        for (const m of rawMats) {
+          if (m && 'emissive' in m) {
+            const std = m as THREE.MeshStandardMaterial;
+            if (e.hitFlash > 0) {
+              std.emissive?.set?.(0xffffff);
+              std.emissiveIntensity = 0.9;
+            } else {
+              std.emissive?.set?.(e.color || 0xef4444);
+              std.emissiveIntensity = 0.2;
+            }
           }
         }
 

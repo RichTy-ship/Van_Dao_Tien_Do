@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import {
   CharacterDef,
   CharacterId,
@@ -572,6 +573,39 @@ function buildSkinnedGeometryForCharacter(
 /**
  * Generates Skinned Mesh for Humanoid characters (Players, NPCs, Demon Lord, Celestial Immortal)
  */
+
+function createPartGeometry(
+  geo: THREE.BufferGeometry,
+  b0: number,
+  b1: number = b0,
+  w0: number = 1.0,
+  w1: number = 0.0
+): THREE.BufferGeometry {
+  const vCount = geo.attributes.position.count;
+  const skinIndices = new Uint16Array(vCount * 4);
+  const skinWeights = new Float32Array(vCount * 4);
+
+  for (let i = 0; i < vCount; i++) {
+    skinIndices[i * 4] = b0;
+    skinIndices[i * 4 + 1] = b1;
+    skinIndices[i * 4 + 2] = 0;
+    skinIndices[i * 4 + 3] = 0;
+
+    skinWeights[i * 4] = w0;
+    skinWeights[i * 4 + 1] = w1;
+    skinWeights[i * 4 + 2] = 0;
+    skinWeights[i * 4 + 3] = 0;
+  }
+
+  geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
+  geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
+  return geo;
+}
+
+
+/**
+ * Generates Skinned Mesh for Humanoid characters (Players, NPCs, Demon Lord, Celestial Immortal)
+ */
 function generateHumanoidSkinnedGeometry(
   charId: CharacterId,
   boneIdx: Map<string, number>,
@@ -579,89 +613,184 @@ function generateHumanoidSkinnedGeometry(
 ): THREE.BufferGeometry {
   const isFemale = charId.includes('female') || charId === 'npc_healer';
   const isDemonLord = charId === 'boss_demon_lord';
-  const widthScale = isDemonLord ? 1.6 : isFemale ? 0.88 : 1.0;
+  const isElder = charId === 'npc_sect_elder';
+  const widthScale = isDemonLord ? 1.45 : isFemale ? 0.88 : 1.0;
 
-  // Segmented multi-cylinder mesh for smooth joint deformations
-  const geo = new THREE.CylinderGeometry(0.24 * widthScale, 0.20 * widthScale, 1.85, 18, 48, false);
-  const posAttr = geo.attributes.position;
-  const vCount = posAttr.count;
+  const headIdx = boneIdx.get('bone_head') ?? 5;
+  const neckIdx = boneIdx.get('bone_neck') ?? 4;
+  const chestIdx = boneIdx.get('bone_chest') ?? 3;
+  const spineIdx = boneIdx.get('bone_spine') ?? 1;
+  const hipsIdx = boneIdx.get('bone_hips') ?? 0;
+  const shLIdx = boneIdx.get('bone_shoulder_l') ?? 7;
+  const elLIdx = boneIdx.get('bone_elbow_l') ?? 8;
+  const handLIdx = boneIdx.get('bone_hand_l') ?? 10;
+  const shRIdx = boneIdx.get('bone_shoulder_r') ?? 12;
+  const elRIdx = boneIdx.get('bone_elbow_r') ?? 13;
+  const handRIdx = boneIdx.get('bone_hand_r') ?? 15;
+  const thighLIdx = boneIdx.get('bone_thigh_l') ?? 16;
+  const kneeLIdx = boneIdx.get('bone_knee_l') ?? 17;
+  const ankleLIdx = boneIdx.get('bone_ankle_l') ?? 18;
+  const thighRIdx = boneIdx.get('bone_thigh_r') ?? 20;
+  const kneeRIdx = boneIdx.get('bone_knee_r') ?? 21;
+  const ankleRIdx = boneIdx.get('bone_ankle_r') ?? 22;
+  const robeRootIdx = boneIdx.get('bone_robe_root') ?? 24;
+  const robeLowerIdx = boneIdx.get('bone_robe_lower') ?? 26;
+  const sleeveLIdx = boneIdx.get('bone_sleeve_l_tip') ?? elLIdx;
+  const sleeveRIdx = boneIdx.get('bone_sleeve_r_tip') ?? elRIdx;
 
-  const skinIndices = new Uint16Array(vCount * 4);
-  const skinWeights = new Float32Array(vCount * 4);
+  const parts: THREE.BufferGeometry[] = [];
 
-  // Anatomical height slices to bind vertices to bones
-  for (let i = 0; i < vCount; i++) {
-    const y = posAttr.getY(i) + 0.925; // Shift to 0..1.85m
-    const x = posAttr.getX(i);
-    const z = posAttr.getZ(i);
+  // 1. Head (Sculpted cranial sphere)
+  const head = createPartGeometry(new THREE.SphereGeometry(0.125 * widthScale, 14, 10), headIdx);
+  head.translate(0, 1.74, 0);
+  parts.push(head);
 
-    let b0 = boneIdx.get('bone_hips') ?? 0;
-    let b1 = boneIdx.get('bone_spine') ?? 1;
-    let w0 = 1.0;
-    let w1 = 0.0;
+  // 2. Daoist Topknot / Hair Bun
+  const bun = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.12, 10), headIdx);
+  bun.translate(0, 1.88, -0.02);
+  parts.push(bun);
 
-    if (y < 0.15) {
-      // Feet
-      b0 = x > 0 ? (boneIdx.get('bone_toe_l') ?? 19) : (boneIdx.get('bone_toe_r') ?? 23);
-      b1 = x > 0 ? (boneIdx.get('bone_ankle_l') ?? 18) : (boneIdx.get('bone_ankle_r') ?? 22);
-      w0 = 0.8;
-      w1 = 0.2;
-    } else if (y < 0.50) {
-      // Shins / Knees
-      b0 = x > 0 ? (boneIdx.get('bone_knee_l') ?? 17) : (boneIdx.get('bone_knee_r') ?? 21);
-      b1 = x > 0 ? (boneIdx.get('bone_ankle_l') ?? 18) : (boneIdx.get('bone_ankle_r') ?? 22);
-      w0 = 0.7;
-      w1 = 0.3;
-    } else if (y < 0.92) {
-      // Thighs
-      b0 = x > 0 ? (boneIdx.get('bone_thigh_l') ?? 16) : (boneIdx.get('bone_thigh_r') ?? 20);
-      b1 = boneIdx.get('bone_hips') ?? 0;
-      w0 = 0.75;
-      w1 = 0.25;
-    } else if (y < 1.15) {
-      // Spine
-      b0 = boneIdx.get('bone_spine') ?? 1;
-      b1 = boneIdx.get('bone_spine1') ?? 2;
-      w0 = 0.6;
-      w1 = 0.4;
-    } else if (y < 1.45) {
-      // Chest
-      b0 = boneIdx.get('bone_chest') ?? 3;
-      b1 = boneIdx.get('bone_neck') ?? 4;
-      w0 = 0.7;
-      w1 = 0.3;
-      // Robe secondary flutter
-      if (z < -0.05) {
-        b1 = boneIdx.get('bone_robe_root') ?? 24;
-        w1 = 0.4;
-      }
-    } else if (y < 1.62) {
-      // Neck
-      b0 = boneIdx.get('bone_neck') ?? 4;
-      b1 = boneIdx.get('bone_head') ?? 5;
-      w0 = 0.7;
-      w1 = 0.3;
-    } else {
-      // Head
-      b0 = boneIdx.get('bone_head') ?? 5;
-      b1 = boneIdx.get('bone_neck') ?? 4;
-      w0 = 0.95;
-      w1 = 0.05;
-    }
+  // 3. Jade Hairpin (Trâm Cài Tóc)
+  const pin = createPartGeometry(new THREE.CylinderGeometry(0.012, 0.012, 0.28, 8), headIdx);
+  pin.rotateZ(Math.PI / 2);
+  pin.translate(0, 1.88, -0.02);
+  parts.push(pin);
 
-    const idx = i * 4;
-    skinIndices[idx] = b0;
-    skinIndices[idx + 1] = b1;
-    skinWeights[idx] = w0;
-    skinWeights[idx + 1] = w1;
+  // Elder Long Daoist Beard
+  if (isElder) {
+    const beard = createPartGeometry(new THREE.ConeGeometry(0.08, 0.40, 8), headIdx, neckIdx, 0.8, 0.2);
+    beard.rotateX(Math.PI);
+    beard.translate(0, 1.44, 0.10);
+    parts.push(beard);
   }
 
-  geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
-  geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
-  geo.computeVertexNormals();
+  // Female Twin Flowing Hair Locks
+  if (isFemale) {
+    const hairL = createPartGeometry(new THREE.CylinderGeometry(0.03, 0.015, 0.55, 6), headIdx, neckIdx, 0.7, 0.3);
+    hairL.translate(0.08, 1.38, -0.09);
+    parts.push(hairL);
 
-  return geo;
+    const hairR = createPartGeometry(new THREE.CylinderGeometry(0.03, 0.015, 0.55, 6), headIdx, neckIdx, 0.7, 0.3);
+    hairR.translate(-0.08, 1.38, -0.09);
+    parts.push(hairR);
+  }
+
+  // Demon Lord Curved Obsidian Horns
+  if (isDemonLord) {
+    const hornL = createPartGeometry(new THREE.ConeGeometry(0.07, 0.48, 8), headIdx);
+    hornL.rotateZ(0.45);
+    hornL.rotateX(-0.3);
+    hornL.translate(0.15, 1.88, 0.06);
+    parts.push(hornL);
+
+    const hornR = createPartGeometry(new THREE.ConeGeometry(0.07, 0.48, 8), headIdx);
+    hornR.rotateZ(-0.45);
+    hornR.rotateX(-0.3);
+    hornR.translate(-0.15, 1.88, 0.06);
+    parts.push(hornR);
+  }
+
+  // 4. Neck
+  const neck = createPartGeometry(new THREE.CylinderGeometry(0.065, 0.075, 0.12, 10), neckIdx);
+  neck.translate(0, 1.54, 0);
+  parts.push(neck);
+
+  // 5. Chest & Hanfu Crossed Lapels (Áo Bào Cổ Chéo)
+  const chest = createPartGeometry(new THREE.CylinderGeometry(0.20 * widthScale, 0.17 * widthScale, 0.36, 14), chestIdx, spineIdx, 0.7, 0.3);
+  chest.translate(0, 1.32, 0);
+  parts.push(chest);
+
+  // 6. Waist Belt & Dan Tian Core Sash
+  const belt = createPartGeometry(new THREE.CylinderGeometry(0.18 * widthScale, 0.185 * widthScale, 0.14, 14), spineIdx, hipsIdx, 0.6, 0.4);
+  belt.translate(0, 1.08, 0);
+  parts.push(belt);
+
+  // Jade Pendant hanging from sash
+  const pendant = createPartGeometry(new THREE.BoxGeometry(0.04, 0.12, 0.02), hipsIdx);
+  pendant.translate(0.08 * widthScale, 0.98, 0.18);
+  parts.push(pendant);
+
+  // 7. Left Arm (T-Pose along +X axis)
+  const shL = createPartGeometry(new THREE.SphereGeometry(0.085 * widthScale, 10, 8), shLIdx);
+  shL.translate(0.26 * widthScale, 1.50, 0);
+  parts.push(shL);
+
+  const uArmL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), shLIdx);
+  uArmL.rotateZ(-Math.PI / 2);
+  uArmL.translate(0.40 * widthScale, 1.50, 0);
+  parts.push(uArmL);
+
+  // Billowing Wide Daoist Sleeve (Tay Áo Rộng Thướt Tha)
+  const fArmL = createPartGeometry(new THREE.CylinderGeometry(0.08, 0.15, 0.26, 10), elLIdx, sleeveLIdx, 0.6, 0.4);
+  fArmL.rotateZ(-Math.PI / 2);
+  fArmL.translate(0.67 * widthScale, 1.50, 0);
+  parts.push(fArmL);
+
+  const handL = createPartGeometry(new THREE.BoxGeometry(0.10, 0.05, 0.025), handLIdx);
+  handL.translate(0.85 * widthScale, 1.50, 0);
+  parts.push(handL);
+
+  // 8. Right Arm (T-Pose along -X axis)
+  const shR = createPartGeometry(new THREE.SphereGeometry(0.085 * widthScale, 10, 8), shRIdx);
+  shR.translate(-0.26 * widthScale, 1.50, 0);
+  parts.push(shR);
+
+  const uArmR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.075, 0.28, 10), shRIdx);
+  uArmR.rotateZ(Math.PI / 2);
+  uArmR.translate(-0.40 * widthScale, 1.50, 0);
+  parts.push(uArmR);
+
+  // Billowing Wide Daoist Sleeve Right
+  const fArmR = createPartGeometry(new THREE.CylinderGeometry(0.08, 0.15, 0.26, 10), elRIdx, sleeveRIdx, 0.6, 0.4);
+  fArmR.rotateZ(Math.PI / 2);
+  fArmR.translate(-0.67 * widthScale, 1.50, 0);
+  parts.push(fArmR);
+
+  const handR = createPartGeometry(new THREE.BoxGeometry(0.10, 0.05, 0.025), handRIdx);
+  handR.translate(-0.85 * widthScale, 1.50, 0);
+  parts.push(handR);
+
+  // 9. Lower Robe Skirt (Vạt Áo Dưới)
+  const skirt = createPartGeometry(new THREE.CylinderGeometry(0.185 * widthScale, 0.30 * widthScale, 0.60, 14), hipsIdx, robeRootIdx, 0.7, 0.3);
+  skirt.translate(0, 0.72, 0);
+  parts.push(skirt);
+
+  // 10. Left Leg (Thigh, Shin, Daoist Boot)
+  const thighL = createPartGeometry(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 10), thighLIdx);
+  thighL.translate(0.12 * widthScale, 0.69, 0);
+  parts.push(thighL);
+
+  const shinL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.05, 0.40, 10), kneeLIdx);
+  shinL.translate(0.12 * widthScale, 0.28, 0);
+  parts.push(shinL);
+
+  const bootL = createPartGeometry(new THREE.BoxGeometry(0.075, 0.08, 0.18), ankleLIdx);
+  bootL.translate(0.12 * widthScale, 0.04, 0.05);
+  parts.push(bootL);
+
+  // 11. Right Leg (Thigh, Shin, Daoist Boot)
+  const thighR = createPartGeometry(new THREE.CylinderGeometry(0.07, 0.06, 0.42, 10), thighRIdx);
+  thighR.translate(-0.12 * widthScale, 0.69, 0);
+  parts.push(thighR);
+
+  const shinR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.05, 0.40, 10), kneeRIdx);
+  shinR.translate(-0.12 * widthScale, 0.28, 0);
+  parts.push(shinR);
+
+  const bootR = createPartGeometry(new THREE.BoxGeometry(0.075, 0.08, 0.18), ankleRIdx);
+  bootR.translate(-0.12 * widthScale, 0.04, 0.05);
+  parts.push(bootR);
+
+  // 12. Flowing Back Robe Cape
+  const cape = createPartGeometry(new THREE.BoxGeometry(0.36 * widthScale, 1.0, 0.025), robeRootIdx, robeLowerIdx, 0.5, 0.5);
+  cape.translate(0, 0.85, -0.15);
+  parts.push(cape);
+
+  const merged = mergeGeometries(parts, false);
+  merged.computeVertexNormals();
+  return merged;
 }
+
 
 /**
  * Skinned mesh for Nine-tailed Fox (independent 9 tail influences)
@@ -670,54 +799,86 @@ function generateFoxSkinnedGeometry(
   boneIdx: Map<string, number>,
   bonesList: THREE.Bone[]
 ): THREE.BufferGeometry {
-  const geo = new THREE.CylinderGeometry(0.35, 0.25, 1.3, 16, 32);
-  const posAttr = geo.attributes.position;
-  const vCount = posAttr.count;
-
-  const skinIndices = new Uint16Array(vCount * 4);
-  const skinWeights = new Float32Array(vCount * 4);
-
   const pelvisIdx = boneIdx.get('bone_quad_pelvis') ?? 0;
+  const spineIdx = boneIdx.get('bone_quad_spine_mid') ?? 1;
   const chestIdx = boneIdx.get('bone_quad_chest') ?? 3;
   const headIdx = boneIdx.get('bone_quad_head') ?? 5;
+  const legFLIdx = boneIdx.get('bone_quad_knee_fl') ?? 7;
+  const legFRIdx = boneIdx.get('bone_quad_knee_fr') ?? 10;
+  const legBLIdx = boneIdx.get('bone_quad_knee_bl') ?? 13;
+  const legBRIdx = boneIdx.get('bone_quad_knee_br') ?? 16;
 
-  for (let i = 0; i < vCount; i++) {
-    const y = posAttr.getY(i);
-    const z = posAttr.getZ(i);
+  const parts: THREE.BufferGeometry[] = [];
 
-    let b0 = pelvisIdx;
-    let b1 = chestIdx;
-    let w0 = 0.5;
-    let w1 = 0.5;
+  // 1. Fox Cranium Head
+  const head = createPartGeometry(new THREE.SphereGeometry(0.18, 12, 10), headIdx);
+  head.translate(0, 0.72, 0.55);
+  parts.push(head);
 
-    if (y > 0.4) {
-      b0 = headIdx;
-      b1 = chestIdx;
-      w0 = 0.7;
-      w1 = 0.3;
-    } else if (y < -0.2) {
-      b0 = pelvisIdx;
-      // Tail binding for rear vertices
-      if (z < -0.1) {
-        const tailNum = (Math.abs(Math.floor(posAttr.getX(i) * 10)) % 9) + 1;
-        b1 = boneIdx.get(`bone_fox_tail_${tailNum}_base`) ?? pelvisIdx;
-        w0 = 0.3;
-        w1 = 0.7;
-      }
-    }
+  // Fox Pointed Snout / Muzzle
+  const snout = createPartGeometry(new THREE.ConeGeometry(0.10, 0.24, 8), headIdx);
+  snout.rotateX(Math.PI / 2);
+  snout.translate(0, 0.68, 0.72);
+  parts.push(snout);
 
-    const idx = i * 4;
-    skinIndices[idx] = b0;
-    skinIndices[idx + 1] = b1;
-    skinWeights[idx] = w0;
-    skinWeights[idx + 1] = w1;
+  // Pointed Ears
+  const earL = createPartGeometry(new THREE.ConeGeometry(0.06, 0.20, 6), headIdx);
+  earL.rotateZ(0.25);
+  earL.translate(0.10, 0.90, 0.50);
+  parts.push(earL);
+
+  const earR = createPartGeometry(new THREE.ConeGeometry(0.06, 0.20, 6), headIdx);
+  earR.rotateZ(-0.25);
+  earR.translate(-0.10, 0.90, 0.50);
+  parts.push(earR);
+
+  // 2. Torso (Chest & Pelvis)
+  const chest = createPartGeometry(new THREE.CylinderGeometry(0.24, 0.22, 0.45, 12), chestIdx, spineIdx, 0.7, 0.3);
+  chest.rotateX(Math.PI / 2);
+  chest.translate(0, 0.58, 0.20);
+  parts.push(chest);
+
+  const body = createPartGeometry(new THREE.CylinderGeometry(0.22, 0.20, 0.45, 12), spineIdx, pelvisIdx, 0.6, 0.4);
+  body.rotateX(Math.PI / 2);
+  body.translate(0, 0.55, -0.22);
+  parts.push(body);
+
+  // 3. 4 Quadruped Legs & Paws
+  const legFL = createPartGeometry(new THREE.CylinderGeometry(0.055, 0.045, 0.50, 8), legFLIdx);
+  legFL.translate(0.16, 0.25, 0.26);
+  parts.push(legFL);
+
+  const legFR = createPartGeometry(new THREE.CylinderGeometry(0.055, 0.045, 0.50, 8), legFRIdx);
+  legFR.translate(-0.16, 0.25, 0.26);
+  parts.push(legFR);
+
+  const legBL = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.045, 0.50, 8), legBLIdx);
+  legBL.translate(0.16, 0.25, -0.32);
+  parts.push(legBL);
+
+  const legBR = createPartGeometry(new THREE.CylinderGeometry(0.06, 0.045, 0.50, 8), legBRIdx);
+  legBR.translate(-0.16, 0.25, -0.32);
+  parts.push(legBR);
+
+  // 4. 9 INDEPENDENT BUSHY TAILS (Cửu Vĩ Xòe Quạt Lộng Lẫy)
+  for (let t = 1; t <= 9; t++) {
+    const tailBaseIdx = boneIdx.get(`bone_fox_tail_${t}_base`) ?? pelvisIdx;
+    const tailMidIdx = boneIdx.get(`bone_fox_tail_${t}_mid`) ?? tailBaseIdx;
+
+    // Radiating fan angles (-0.8 rad to +0.8 rad)
+    const fanAngle = ((t - 5) / 4) * 0.75;
+    const tailGeo = createPartGeometry(new THREE.ConeGeometry(0.10, 0.85, 8), tailBaseIdx, tailMidIdx, 0.5, 0.5);
+    tailGeo.rotateX(-Math.PI / 3);
+    tailGeo.rotateY(fanAngle);
+    tailGeo.translate(Math.sin(fanAngle) * 0.15, 0.65, -0.55);
+    parts.push(tailGeo);
   }
 
-  geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
-  geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
-  geo.computeVertexNormals();
-  return geo;
+  const merged = mergeGeometries(parts, false);
+  merged.computeVertexNormals();
+  return merged;
 }
+
 
 /**
  * Skinned mesh for Quadruped beasts (White Tiger, Demon Boar, Spirit Deer)
@@ -727,52 +888,96 @@ function generateQuadrupedSkinnedGeometry(
   boneIdx: Map<string, number>,
   bonesList: THREE.Bone[]
 ): THREE.BufferGeometry {
-  const geo = new THREE.CylinderGeometry(0.42, 0.38, 1.6, 16, 28);
-  const posAttr = geo.attributes.position;
-  const vCount = posAttr.count;
-
-  const skinIndices = new Uint16Array(vCount * 4);
-  const skinWeights = new Float32Array(vCount * 4);
+  const isBoar = charId.includes('boar');
+  const isTiger = charId.includes('tiger');
+  const scale = isBoar ? 1.2 : 1.0;
 
   const pelvisIdx = boneIdx.get('bone_quad_pelvis') ?? 0;
+  const spineIdx = boneIdx.get('bone_quad_spine_mid') ?? 1;
   const chestIdx = boneIdx.get('bone_quad_chest') ?? 3;
   const headIdx = boneIdx.get('bone_quad_head') ?? 5;
+  const legFLIdx = boneIdx.get('bone_quad_knee_fl') ?? 7;
+  const legFRIdx = boneIdx.get('bone_quad_knee_fr') ?? 10;
+  const legBLIdx = boneIdx.get('bone_quad_knee_bl') ?? 13;
+  const legBRIdx = boneIdx.get('bone_quad_knee_br') ?? 16;
+  const tailIdx = boneIdx.get('bone_quad_tail_02') ?? pelvisIdx;
 
-  for (let i = 0; i < vCount; i++) {
-    const y = posAttr.getY(i);
-    let b0 = pelvisIdx;
-    let b1 = chestIdx;
-    let w0 = 0.5;
-    let w1 = 0.5;
+  const parts: THREE.BufferGeometry[] = [];
 
-    if (y > 0.45) {
-      b0 = headIdx;
-      b1 = chestIdx;
-      w0 = 0.8;
-      w1 = 0.2;
-    } else if (y < -0.3) {
-      b0 = pelvisIdx;
-      b1 = boneIdx.get('bone_quad_tail_1') ?? pelvisIdx;
-      w0 = 0.8;
-      w1 = 0.2;
-    }
+  // 1. Beast Head
+  const headGeo = isBoar
+    ? new THREE.BoxGeometry(0.36, 0.32, 0.44)
+    : new THREE.SphereGeometry(0.24, 12, 10);
+  const head = createPartGeometry(headGeo, headIdx);
+  head.translate(0, 0.78, 0.65);
+  parts.push(head);
 
-    const idx = i * 4;
-    skinIndices[idx] = b0;
-    skinIndices[idx + 1] = b1;
-    skinWeights[idx] = w0;
-    skinWeights[idx + 1] = w1;
+  // Tusks for Demon Boar
+  if (isBoar) {
+    const tuskL = createPartGeometry(new THREE.ConeGeometry(0.045, 0.28, 6), headIdx);
+    tuskL.rotateX(-0.4);
+    tuskL.rotateZ(0.3);
+    tuskL.translate(0.18, 0.78, 0.85);
+    parts.push(tuskL);
+
+    const tuskR = createPartGeometry(new THREE.ConeGeometry(0.045, 0.28, 6), headIdx);
+    tuskR.rotateX(-0.4);
+    tuskR.rotateZ(-0.3);
+    tuskR.translate(-0.18, 0.78, 0.85);
+    parts.push(tuskR);
   }
 
-  geo.setAttribute('skinIndex', new THREE.BufferAttribute(skinIndices, 4));
-  geo.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeights, 4));
-  geo.computeVertexNormals();
-  return geo;
+  // Feline Ears for Tiger
+  if (isTiger) {
+    const earL = createPartGeometry(new THREE.ConeGeometry(0.06, 0.14, 6), headIdx);
+    earL.translate(0.14, 1.0, 0.60);
+    parts.push(earL);
+
+    const earR = createPartGeometry(new THREE.ConeGeometry(0.06, 0.14, 6), headIdx);
+    earR.translate(-0.14, 1.0, 0.60);
+    parts.push(earR);
+  }
+
+  // 2. Muscular Torso & Chest
+  const chest = createPartGeometry(new THREE.CylinderGeometry(0.32 * scale, 0.28 * scale, 0.55, 12), chestIdx, spineIdx, 0.7, 0.3);
+  chest.rotateX(Math.PI / 2);
+  chest.translate(0, 0.65, 0.25);
+  parts.push(chest);
+
+  const rear = createPartGeometry(new THREE.CylinderGeometry(0.28 * scale, 0.26 * scale, 0.55, 12), spineIdx, pelvisIdx, 0.6, 0.4);
+  rear.rotateX(Math.PI / 2);
+  rear.translate(0, 0.62, -0.28);
+  parts.push(rear);
+
+  // 3. 4 Sturdy Legs
+  const legFL = createPartGeometry(new THREE.CylinderGeometry(0.08, 0.065, 0.55, 8), legFLIdx);
+  legFL.translate(0.20, 0.28, 0.30);
+  parts.push(legFL);
+
+  const legFR = createPartGeometry(new THREE.CylinderGeometry(0.08, 0.065, 0.55, 8), legFRIdx);
+  legFR.translate(-0.20, 0.28, 0.30);
+  parts.push(legFR);
+
+  const legBL = createPartGeometry(new THREE.CylinderGeometry(0.09, 0.07, 0.55, 8), legBLIdx);
+  legBL.translate(0.20, 0.28, -0.36);
+  parts.push(legBL);
+
+  const legBR = createPartGeometry(new THREE.CylinderGeometry(0.09, 0.07, 0.55, 8), legBRIdx);
+  legBR.translate(-0.20, 0.28, -0.36);
+  parts.push(legBR);
+
+  // 4. Tail
+  const tail = createPartGeometry(new THREE.CylinderGeometry(0.05, 0.03, 0.65, 6), tailIdx);
+  tail.rotateX(-Math.PI / 3);
+  tail.translate(0, 0.50, -0.75);
+  parts.push(tail);
+
+  const merged = mergeGeometries(parts, false);
+  merged.computeVertexNormals();
+  return merged;
 }
 
-/**
- * Skinned mesh for Wood Spirit
- */
+
 function generateWoodSpiritSkinnedGeometry(
   boneIdx: Map<string, number>,
   bonesList: THREE.Bone[]
