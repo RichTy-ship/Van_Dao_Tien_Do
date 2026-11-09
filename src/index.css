@@ -1,0 +1,49 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Cinzel', Georgia, serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+    background-color: #080b10;
+    color: #e8e2d5;
+    user-select: none;
+    overflow: hidden;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+
+  .font-mono, .tabular-nums {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.hud-stroke {
+  paint-order: stroke fill;
+  -webkit-text-stroke: 3px #05070b;
+  text-shadow: 0 2px 6px rgba(0, 0, 0, 0.95);
+}
+
+/* Custom subtle scrollbars for the GDD Codex & Inspector modals */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #0d121a;
+}
+::-webkit-scrollbar-thumb {
+  background: #2c3849;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #c89d54;
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Vạn Đạo Tiên Đồ — 2.5D Xianxia MMORPG & GDD",
+  "description": "Trải nghiệm thực chiến 2.5D Action MMORPG Tu Tiên với Hệ Thống Linh Căn Ẩn, Cơ Duyên Động và Toàn Thư Thiết Kế 25 Hệ Thống (GDD).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
