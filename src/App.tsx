@@ -2102,9 +2102,12 @@ export default function App() {
 
   return (
     <main className="relative w-screen h-screen overflow-hidden bg-[#080b10] select-none">
-      {/* 3D WebGL Xianxia World or 2.5D Canvas World */}
-      {render3D ? (
-        <div className="absolute inset-0 w-full h-full">
+      {/* Isolated 60FPS 2.5D Isometric World Canvas - ALWAYS MOUNTED so simulation loop runs */}
+      <div ref={canvasMountRef} className="absolute inset-0 w-full h-full" />
+
+      {/* 3D WebGL Xianxia World Layer - sits on top when 3D mode is active */}
+      {render3D && (
+        <div className="absolute inset-0 w-full h-full z-10 pointer-events-auto">
           <XianxiaWorld3D
             simRef={simRef}
             charData={charData}
@@ -2115,8 +2118,6 @@ export default function App() {
             onToggleRenderMode={() => setRender3D((prev) => !prev)}
           />
         </div>
-      ) : (
-        <div ref={canvasMountRef} className="absolute inset-0 w-full h-full" />
       )}
 
       {/* ====================================================================
