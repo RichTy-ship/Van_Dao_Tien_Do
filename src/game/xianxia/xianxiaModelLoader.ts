@@ -31,9 +31,9 @@ export interface XianxiaModelInstance {
 
 // Map character IDs to real GLB model assets
 const MODEL_ASSET_URLS: Record<string, string> = {
-  // Players - Asian Xianxia Cultivator Base Model
+  // Players - Asian Xianxia Cultivators
   player_male: '/models/base.glb',
-  player_female: '/models/base.glb',
+  player_female: '/models/player_female.glb',
   base: '/models/base.glb',
 
   // NPCs
@@ -149,7 +149,6 @@ function retargetClipForBaseModel(
 async function loadHumanoidSharedClips(): Promise<THREE.AnimationClip[]> {
   const clips: THREE.AnimationClip[] = [];
   const maleHips = new THREE.Vector3(0.14052, 0.10675, -0.00253);
-  const femaleHips = new THREE.Vector3(0.10674, 0.01461, -0.03697);
 
   try {
     const maleGltf = await loadGltfAsset('/models/player_male.glb');
@@ -163,16 +162,16 @@ async function loadHumanoidSharedClips(): Promise<THREE.AnimationClip[]> {
   }
 
   try {
-    const femaleGltf = await loadGltfAsset('/models/player_female.glb');
-    if (femaleGltf && femaleGltf.animations) {
-      for (const anim of femaleGltf.animations) {
+    const elderGltf = await loadGltfAsset('/models/npc_elder.glb');
+    if (elderGltf && elderGltf.animations) {
+      for (const anim of elderGltf.animations) {
         if (!clips.some((c) => c.name === anim.name)) {
-          clips.push(retargetClipForBaseModel(anim, femaleHips));
+          clips.push(retargetClipForBaseModel(anim, maleHips));
         }
       }
     }
   } catch (e) {
-    console.warn('Could not load female animation clips:', e);
+    console.warn('Could not load elder animation clips:', e);
   }
 
   return clips;
