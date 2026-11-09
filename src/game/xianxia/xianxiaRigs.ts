@@ -1312,7 +1312,7 @@ function generateMountSkinnedGeometry(
 /**
  * Attaches weapon models and ornaments into dedicated sockets
  */
-function attachDefaultSocketItems(
+export function attachDefaultSocketItems(
   charId: CharacterId,
   socketKey: string,
   socketObj: THREE.Object3D,

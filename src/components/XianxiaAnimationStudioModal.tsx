@@ -354,6 +354,10 @@ export const XianxiaAnimationStudioModal: React.FC<Props> = ({ onClose }) => {
       controllerRef.current.locomotionSpeed = val;
       setSelectedClipId(controllerRef.current.currentClip.id);
     }
+    if (realModelRef.current) {
+      const targetClip = val <= 0.05 ? 'Idle' : val <= 0.4 ? 'Walk' : val <= 0.75 ? 'Run' : 'Sprint';
+      realModelRef.current.playClip(targetClip, 0.2);
+    }
   };
 
   // Handle Camera Presets
