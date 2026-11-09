@@ -87,10 +87,10 @@ export const XianxiaWorld3D: React.FC<Props> = ({
     container.appendChild(renderer.domElement);
 
     // 2. Xianxia Lighting Rig (Vibrant Celestial Palette)
-    const ambientLight = new THREE.AmbientLight(0x64748b, 2.2);
+    const ambientLight = new THREE.AmbientLight(0x94a3b8, 1.2);
     scene.add(ambientLight);
 
-    const celestialSun = new THREE.DirectionalLight(0xfff6e0, 3.5);
+    const celestialSun = new THREE.DirectionalLight(0xfff6e0, 2.0);
     celestialSun.position.set(20, 35, 15);
     celestialSun.castShadow = true;
     celestialSun.shadow.mapSize.width = 2048;

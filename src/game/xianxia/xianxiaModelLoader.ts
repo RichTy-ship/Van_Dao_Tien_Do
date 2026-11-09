@@ -215,6 +215,92 @@ function createProceduralFallback(
 }
 
 /**
+ * Applies Asian Xianxia palette vertex colors to base.glb mesh
+ */
+function applyXianxiaColoring(mesh: THREE.SkinnedMesh) {
+  const geo = mesh.geometry;
+  if (!geo || !geo.attributes.position || !geo.attributes.skinIndex) return;
+
+  const posAttr = geo.attributes.position;
+  const skinAttr = geo.attributes.skinIndex;
+  const count = posAttr.count;
+
+  if (geo.attributes.color && geo.attributes.color.count === count) return;
+
+  const colors = new Float32Array(count * 3);
+
+  for (let i = 0; i < count; i++) {
+    const x = posAttr.getX(i);
+    const y = posAttr.getY(i);
+    const z = posAttr.getZ(i);
+    const j0 = skinAttr.getX(i);
+
+    // Default Upper Hanfu Robes: Celestial Azure Silk (#0284C7)
+    let r = 0.14;
+    let g = 0.48;
+    let b = 0.78;
+
+    // Golden cloud embroidery trim along center chest & collar
+    if (Math.abs(x) < 0.07 && y > 1.15 && y < 1.48 && z > 0.03) {
+      r = 0.92;
+      g = 0.72;
+      b = 0.22;
+    } else if (j0 === 5) {
+      // Head
+      if (y > 1.62 && z < 0.05) {
+        // Raven Black Hair Bun
+        r = 0.08;
+        g = 0.08;
+        b = 0.09;
+      } else {
+        // Handsome Fair Asian Skin Tone
+        r = 0.95;
+        g = 0.81;
+        b = 0.71;
+      }
+    } else if (j0 === 4) {
+      // Neck Skin
+      r = 0.92;
+      g = 0.78;
+      b = 0.68;
+    } else if ((j0 >= 9 && j0 <= 24) || (j0 >= 28 && j0 <= 43)) {
+      // Hands Skin
+      r = 0.94;
+      g = 0.80;
+      b = 0.70;
+    } else if (j0 === 0 && y > 0.90 && y < 1.08) {
+      // Imperial Crimson Silk Sash Belt with Golden Jade Trim
+      r = 0.82;
+      g = 0.18;
+      b = 0.18;
+    } else if (j0 === 46 || j0 === 47 || j0 === 50 || j0 === 51 || y < 0.12) {
+      // Dark Cloth Martial Boots
+      if (z > 0.10) {
+        r = 0.85;
+        g = 0.65;
+        b = 0.20; // Golden toe cap
+      } else {
+        r = 0.11;
+        g = 0.11;
+        b = 0.13;
+      }
+    } else if (j0 >= 44 && j0 <= 51) {
+      // Lower Robe / Martial Pants (Deep Midnight Navy)
+      r = 0.10;
+      g = 0.14;
+      b = 0.24;
+    }
+
+    colors[i * 3] = r;
+    colors[i * 3 + 1] = g;
+    colors[i * 3 + 2] = b;
+  }
+
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.attributes.color.needsUpdate = true;
+}
+
+/**
  * Creates a fully rigged, textured, and animated 3D Xianxia model instance from real GLB assets
  */
 export async function createRealXianxiaModel(
@@ -259,16 +345,6 @@ export async function createRealXianxiaModel(
     const boneMap = new Map<string, THREE.Bone>();
     const socketAnchors = new Map<string, THREE.Object3D>();
 
-    // Create high-grade Xianxia PBR material for base model
-    const cultivatorMat = new THREE.MeshStandardMaterial({
-      color: 0xf3f4f6, // Soft ivory porcelain silk
-      roughness: 0.38,
-      metalness: 0.08,
-      emissive: new THREE.Color(stageCfg.auraColor),
-      emissiveIntensity: 0.16,
-      side: THREE.DoubleSide,
-    });
-
     clonedScene.traverse((child) => {
       if ((child as THREE.Bone).isBone) {
         boneMap.set(child.name, child as THREE.Bone);
@@ -305,7 +381,13 @@ export async function createRealXianxiaModel(
         mesh.receiveShadow = true;
 
         if (isBaseModel) {
-          mesh.material = cultivatorMat;
+          applyXianxiaColoring(mesh as THREE.SkinnedMesh);
+          mesh.material = new THREE.MeshStandardMaterial({
+            vertexColors: true,
+            roughness: 0.42,
+            metalness: 0.12,
+            side: THREE.DoubleSide,
+          });
         } else if (mesh.material) {
           const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
           for (const m of mats) {
@@ -477,9 +559,6 @@ export async function createRealXianxiaModel(
       const stageVfx = CULTIVATION_STAGE_VFX_CONFIG[newStage];
       if (!stageVfx) return;
 
-      cultivatorMat.emissive.set(stageVfx.auraColor);
-      cultivatorMat.emissiveIntensity = 0.16 + stageVfx.emissiveIntensity * 0.1;
-
       // Update flying sword trim emissive if equipped
       const sword = socketAnchors.get('RightHandSocket')?.getObjectByName('equipped_flying_sword');
       if (sword) {
@@ -491,6 +570,12 @@ export async function createRealXianxiaModel(
             }
           }
         });
+      }
+
+      // Update Golden Core emissive
+      const danTian = socketAnchors.get('DanTianSocket')?.getObjectByName('dantian_golden_core');
+      if (danTian && (danTian as THREE.Mesh).material) {
+        ((danTian as THREE.Mesh).material as THREE.MeshBasicMaterial).color.set(stageVfx.auraColor);
       }
     };
 
