@@ -15,6 +15,7 @@ import {
 } from './game/rules';
 import { soundEngine } from './game/audio';
 import { GddCodexModal } from './components/GddCodexModal';
+import { XianxiaAnimationStudioModal } from './components/XianxiaAnimationStudioModal';
 import {
   CultivationPanelModal,
   PlayerInventoryState,
@@ -138,6 +139,7 @@ export default function App() {
   // Modals
   const [isGddOpen, setIsGddOpen] = useState<boolean>(false);
   const [isCultivationOpen, setIsCultivationOpen] = useState<boolean>(false);
+  const [isXianxiaStudioOpen, setIsXianxiaStudioOpen] = useState<boolean>(false);
   const [activeDestinyEvent, setActiveDestinyEvent] =
     useState<DestinyEventOutcome | null>(null);
   const [endRunSnapshot, setEndRunSnapshot] = useState<{
@@ -2111,6 +2113,14 @@ export default function App() {
             <span className="text-xs font-mono text-[#c89d54] tracking-wider">
               2.5D ISOMETRIC XIANXIA ACTION MMORPG · PERSISTENT DESTINY ENGINE
             </span>
+            <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setIsXianxiaStudioOpen(true)}
+              className="px-4 py-2 text-xs font-bold bg-[#14233c] hover:bg-[#1e3458] text-[#38bdf8] border border-[#38bdf8]/60 rounded shadow-[0_0_15px_rgba(56,189,248,0.3)] transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5"
+            >
+              <span>🏮</span> Xưởng Hoạt Ảnh 3D Tiên Hiệp (23 Nhân Vật)
+            </button>
             <button
               type="button"
               onClick={() => setIsGddOpen(true)}
@@ -2118,6 +2128,7 @@ export default function App() {
             >
               Mở Toàn Thư Thiết Kế 25 Hệ Thống (GDD) [G]
             </button>
+          </div>
           </div>
 
           {/* Focal Left/Center Title Lockup & Hidden Spiritual Root Mortal Creation */}
@@ -2217,6 +2228,14 @@ export default function App() {
                 className="px-7 py-3.5 text-sm font-bold bg-[#c89d54] hover:bg-[#d9b168] text-[#080b10] rounded transition-transform active:scale-95 whitespace-nowrap shrink-0 cursor-pointer"
               >
                 Bước Vào Tiên Đồ (Bắt Đầu Tu Luyện)
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsXianxiaStudioOpen(true)}
+                className="px-5 py-3.5 text-sm font-semibold bg-[#14233c] hover:bg-[#1e3458] text-[#38bdf8] border border-[#38bdf8]/60 rounded transition-colors whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-2"
+              >
+                <span>🏮</span> Thử Nghiệm Hoạt Ảnh 3D (23 Nhân Vật)
               </button>
 
               <button
@@ -2345,6 +2364,19 @@ export default function App() {
 
             {/* Top-Right Compact Utility Controls */}
             <div className="pointer-events-auto flex items-center gap-2">
+              <button
+                type="button"
+                tabIndex={-1}
+                onClick={(e) => {
+                  e.currentTarget.blur();
+                  setIsXianxiaStudioOpen(true);
+                }}
+                aria-label="Mở Xưởng Hoạt Ảnh 3D Tiên Hiệp"
+                className="px-3 py-2 rounded bg-[#090d14]/92 hover:bg-[#16202e] text-[#38bdf8] border border-[#38bdf8]/50 text-xs font-semibold whitespace-nowrap shrink-0 cursor-pointer flex items-center gap-1"
+              >
+                <span>🏮</span> Hoạt Ảnh 3D
+              </button>
+
               <button
                 type="button"
                 tabIndex={-1}
@@ -2717,6 +2749,12 @@ export default function App() {
           startOrResetGame(newSeed);
         }}
       />
+          {/* ====================================================================
+          VẠN ĐẠO TIÊN ĐỒ 3D CHARACTER ANIMATION STUDIO MODAL (23 CHARACTERS)
+          ==================================================================== */}
+      {isXianxiaStudioOpen && (
+        <XianxiaAnimationStudioModal onClose={() => setIsXianxiaStudioOpen(false)} />
+      )}
     </main>
   );
 }
